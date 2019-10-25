@@ -8,10 +8,10 @@
 
 /// List of export/import kinds.
 enum class wasmer_import_export_kind : uint32_t {
-  WASM_FUNCTION,
-  WASM_GLOBAL,
-  WASM_MEMORY,
-  WASM_TABLE,
+  WASM_FUNCTION = 0,
+  WASM_GLOBAL = 1,
+  WASM_MEMORY = 2,
+  WASM_TABLE = 3,
 };
 
 enum class wasmer_result_t {
@@ -152,6 +152,15 @@ struct wasmer_trampoline_callable_t {
 
 struct wasmer_trampoline_buffer_t {
 
+};
+
+/// Opens a directory that's visible to the WASI module as `alias` but
+/// is backed by the host file at `host_file_path`
+struct wasmer_wasi_map_dir_entry_t {
+  /// What the WASI module will see in its virtual root
+  wasmer_byte_array alias;
+  /// The backing file that the WASI module will interact with via the alias
+  wasmer_byte_array host_file_path;
 };
 
 extern "C" {
@@ -359,8 +368,39 @@ void wasmer_import_object_destroy(wasmer_import_object_t *import_object);
 
 /// Extends an existing import object with new imports
 wasmer_result_t wasmer_import_object_extend(wasmer_import_object_t *import_object,
-                                            wasmer_import_t *imports,
+                                            const wasmer_import_t *imports,
                                             unsigned int imports_len);
+
+/// Call `wasmer_import_object_imports_destroy` to free the memory allocated by this function.
+/// This function return -1 on error.
+int32_t wasmer_import_object_get_functions(const wasmer_import_object_t *import_object,
+                                           wasmer_import_t *imports,
+                                           uint32_t imports_len);
+
+/// Gets an entry from an ImportObject at the name and namespace.
+/// Stores an immutable reference to `name` and `namespace` in `import`.
+///
+/// The caller owns all data involved.
+/// `import_export_value` will be written to based on `tag`, `import_export_value` must be
+/// initialized to point to the type specified by `tag`.  Failure to do so may result
+/// in data corruption or undefined behavior.
+wasmer_result_t wasmer_import_object_get_import(const wasmer_import_object_t *import_object,
+                                                wasmer_byte_array namespace_,
+                                                wasmer_byte_array name,
+                                                wasmer_import_t *import,
+                                                wasmer_import_export_value *import_export_value,
+                                                uint32_t tag);
+
+/// Get the number of functions that an import object contains.
+/// The result of this is useful as an argument to `wasmer_import_object_get_functions`.
+/// This function returns -1 on error.
+int32_t wasmer_import_object_get_num_functions(const wasmer_import_object_t *import_object);
+
+/// Frees the memory acquired in `wasmer_import_object_get_functions`
+///
+/// This function does not free the memory in `wasmer_import_object_t`;
+/// it only frees memory allocated while querying a `wasmer_import_object_t`.
+void wasmer_import_object_imports_destroy(wasmer_import_t *imports, uint32_t imports_len);
 
 /// Creates a new empty import object.
 /// See also `wasmer_import_object_append`
@@ -589,6 +629,27 @@ void *wasmer_trampoline_get_context();
 
 /// Returns true for valid wasm bytes and false for invalid bytes
 bool wasmer_validate(const uint8_t *wasm_bytes, uint32_t wasm_bytes_len);
+
+/// Convenience function that creates a WASI import object with no arguments,
+/// environment variables, preopened files, or mapped directories.
+///
+/// This function is the same as calling [`wasmer_wasi_generate_import_object`] with all
+/// empty values.
+wasmer_import_object_t *wasmer_wasi_generate_default_import_object();
+
+/// Creates a WASI import object.
+///
+/// This function treats null pointers as empty collections.
+/// For example, passing null for a string in `args`, will lead to a zero
+/// length argument in that position.
+wasmer_import_object_t *wasmer_wasi_generate_import_object(const wasmer_byte_array *args,
+                                                           unsigned int args_len,
+                                                           const wasmer_byte_array *envs,
+                                                           unsigned int envs_len,
+                                                           const wasmer_byte_array *preopened_files,
+                                                           unsigned int preopened_files_len,
+                                                           const wasmer_wasi_map_dir_entry_t *mapped_dirs,
+                                                           unsigned int mapped_dirs_len);
 
 } // extern "C"
 
